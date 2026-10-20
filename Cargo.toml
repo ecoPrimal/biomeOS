@@ -84,6 +84,9 @@ keywords = ["biomeos", "distributed", "sovereignty", "primals"]
 categories = ["os", "distributed-systems", "virtualization"]
 
 [workspace.dependencies]
+# Canonical ecosystem types from cellMembrane
+cellmembrane-types = { path = "../../gardens/cellMembrane/crates/cellmembrane-types" }
+
 # Core dependencies
 tokio = { version = "1.0", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time"] }
 serde = { version = "1.0", features = ["derive"] }
