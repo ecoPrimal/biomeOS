@@ -16,6 +16,7 @@ This agent:
 """
 
 import json
+import os
 import subprocess
 import time
 import urllib.request
@@ -23,8 +24,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SONGBIRD_URL = "http://127.0.0.1:17700"  # ADB forward to Pixel songBird
-OLLAMA_URL = "http://localhost:11436"      # local eastGate RTX 4070
-DATA_DIR = Path("/home/eastgate/.local/share/gaia/data")
+OLLAMA_URL = os.environ.get("GAIA_OLLAMA_URL", "http://localhost:11436")
+PIXEL_OLLAMA_URL = os.environ.get(
+    "GAIA_PIXEL_OLLAMA_URL", "http://192.168.4.244:11436"
+)
+DATA_DIR = Path(
+    os.environ.get("GAIA_DATA_DIR", "~/.local/share/gaia/data")
+).expanduser()
 REPORT_DIR = DATA_DIR / "pixel-agent"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -72,14 +78,17 @@ def pixel_think(prompt: str, model: str = "gemma2:2b") -> dict:
     """Think via songBird's http.post → eastGate ollama (Pixel routes through water lock)."""
     body_str = json.dumps({"model": model, "prompt": prompt, "stream": False})
     result = rpc("http.post", {
-        "url": f"{OLLAMA_URL}/api/generate",
+        "url": f"{PIXEL_OLLAMA_URL}/api/generate",
         "body": body_str,
         "headers": {"Content-Type": "application/json"},
     })
     if "result" in result:
         body = result["result"].get("body", "")
         if isinstance(body, str):
-            return json.loads(body)
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                return {"error": "Pixel returned malformed Ollama JSON", "raw": body[:500]}
         return body
     return result
 
@@ -91,8 +100,7 @@ def read_pixel_sensors() -> dict:
             ["adb", "shell", "cat", "/data/local/tmp/biomeos/sensorium/sense.json"],
             timeout=5,
         ).decode().strip()
-        data = json.loads(out.split("\n")[-1] if "\n" in out else out)
-        return data
+        return json.loads(out)
     except Exception as e:
         return {"error": str(e)}
 

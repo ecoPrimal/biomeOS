@@ -7,6 +7,11 @@ BIOMEOS_ROOT="/data/local/tmp/biomeos"
 STATE_DIR="$BIOMEOS_ROOT/sensorium"
 mkdir -p "$STATE_DIR"
 
+json_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\r\n\t' '   '
+}
+
+FAMILY_ID=${FAMILY_ID:-unknown}
 CYCLE=${1:-15}
 echo "GAIA SENSORIUM v2 starting — cycle=${CYCLE}s"
 
@@ -29,6 +34,8 @@ while true; do
         [ ! -d "$tz" ] && continue
         TTYPE=$(cat "${tz}type" 2>/dev/null || echo "unknown")
         TTEMP=$(cat "${tz}temp" 2>/dev/null || echo 0)
+        TTYPE=$(json_escape "$TTYPE")
+        [ -z "$TTEMP" ] && TTEMP=0
         if [ "$FIRST" = true ]; then FIRST=false; else THERMAL_JSON="${THERMAL_JSON},"; fi
         THERMAL_JSON="${THERMAL_JSON}{\"zone\":\"${TTYPE}\",\"temp_mc\":${TTEMP}}"
     done
@@ -41,10 +48,15 @@ while true; do
     WIFI_FREQ=$(echo "$WIFI_DUMP" | grep ' f=' | tail -1 | sed 's/.*f=\([0-9]*\).*/\1/' 2>/dev/null || echo "0")
     WIFI_LINK=$(echo "$WIFI_DUMP" | grep 'link=' | tail -1 | sed 's/.*link=\([0-9]*\).*/\1/' 2>/dev/null || echo "0")
     WIFI_SSID=$(echo "$WIFI_DUMP" | grep 'SSID:' | head -1 | sed 's/.*SSID: "\([^"]*\)".*/\1/' 2>/dev/null || echo "")
+    [ -z "$WIFI_RSSI" ] && WIFI_RSSI=0
+    [ -z "$WIFI_FREQ" ] && WIFI_FREQ=0
+    [ -z "$WIFI_LINK" ] && WIFI_LINK=0
 
     # Memory
     MEM_TOTAL=$(grep MemTotal /proc/meminfo | awk '{print $2}')
     MEM_AVAIL=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
+    [ -z "$MEM_TOTAL" ] && MEM_TOTAL=1
+    [ -z "$MEM_AVAIL" ] && MEM_AVAIL=0
     MEM_PCT=$(awk "BEGIN {printf \"%.1f\", ($MEM_TOTAL - $MEM_AVAIL) * 100 / $MEM_TOTAL}")
 
     # Storage
@@ -88,6 +100,12 @@ while true; do
     BAT_TEMP_C=$(awk "BEGIN {printf \"%.1f\", $BAT_TEMP / 10}")
     BAT_VOLT_V=$(awk "BEGIN {printf \"%.3f\", $BAT_VOLT / 1000000}")
     BAT_CUR_MA=$(awk "BEGIN {printf \"%.1f\", $BAT_CURRENT / 1000}")
+    FAMILY_ID_JSON=$(json_escape "$FAMILY_ID")
+    BAT_STATUS_JSON=$(json_escape "$BAT_STATUS")
+    BAT_HEALTH_JSON=$(json_escape "$BAT_HEALTH")
+    WIFI_SSID_JSON=$(json_escape "$WIFI_SSID")
+    SCREEN_STATE_JSON=$(json_escape "$SCREEN_STATE")
+    CELL_TYPE_JSON=$(json_escape "$CELL_TYPE")
 
     # Write full state
     cat > "$STATE_DIR/sense.json" << SENSE_EOF
@@ -95,18 +113,18 @@ while true; do
   "ts": "$TS",
   "device": "pixel8a",
   "gate": "grapheneGate",
-  "family": "8ff3b864a4bc589a",
+  "family": "$FAMILY_ID_JSON",
   "battery": {
     "level": $BAT_LEVEL,
-    "status": "$BAT_STATUS",
+    "status": "$BAT_STATUS_JSON",
     "temp_c": $BAT_TEMP_C,
     "voltage_v": $BAT_VOLT_V,
     "current_ma": $BAT_CUR_MA,
-    "health": "$BAT_HEALTH",
+    "health": "$BAT_HEALTH_JSON",
     "usb_power": $USB_ONLINE
   },
   "wifi": {
-    "ssid": "$WIFI_SSID",
+    "ssid": "$WIFI_SSID_JSON",
     "rssi_dbm": $WIFI_RSSI,
     "freq_mhz": $WIFI_FREQ,
     "link_mbps": $WIFI_LINK,
@@ -123,7 +141,7 @@ while true; do
     "avail_kb": $STOR_AVAIL
   },
   "display": {
-    "state": "$SCREEN_STATE",
+    "state": "$SCREEN_STATE_JSON",
     "brightness": $BRIGHTNESS,
     "resolution": "1080x2400",
     "refresh_hz": 120
@@ -136,7 +154,7 @@ while true; do
     "media_volume": $MEDIA_VOL
   },
   "cellular": {
-    "type": "$CELL_TYPE"
+    "type": "$CELL_TYPE_JSON"
   },
   "primals": {
     "beardog": $BD_ALIVE,
