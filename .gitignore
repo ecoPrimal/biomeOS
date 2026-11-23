@@ -109,6 +109,8 @@ command_journal.json
 archive/
 cloudflared
 *.bak*/
+__pycache__/
+*.pyc
 
 # ── Chimera build artifacts ──────────────────────────────────────────────────
 chimeras/**/Cargo.lock
